@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Multiplayer 🎮</title>
+
+    <script src="/socket.io/socket.io.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f3f4f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background: white;
+            width: 90%;
+            max-width: 500px;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            color: #1e293b;
+        }
+
+        p {
+            color: #64748b;
+        }
+
+        input {
+            width: 90%;
+            padding: 12px;
+            margin: 8px 0;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+
+        button {
+            padding: 12px 20px;
+            margin: 8px;
+            border: none;
+            border-radius: 10px;
+            background: #2563eb;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        #roomScreen {
+            display: none;
+        }
+
+        #roomCode {
+            font-size: 32px;
+            font-weight: bold;
+            margin: 15px 0;
+            color: #2563eb;
+            letter-spacing: 2px;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        li {
+            background: #f1f5f9;
+            margin: 8px 0;
+            padding: 12px;
+            border-radius: 10px;
+            font-weight: 500;
+            color: #334155;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .host-badge {
+            background: #f59e0b;
+            color: white;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <!-- MÀN HÌNH CHÍNH -->
+    <div id="homeScreen">
+        <h1>🎮 Game Multiplayer</h1>
+        <p>Nhập tên của cậu để bắt đầu nhé</p>
+
+        <input
+            type="text"
+            id="playerName"
+            placeholder="Tên người chơi"
+        >
+
+        <br>
+
+        <button onclick="createRoom()">
+            🏠 Tạo phòng
+        </button>
+
+        <br>
+
+        <input
+            type="text"
+            id="roomInput"
+            placeholder="Nhập mã phòng"
+        >
+
+        <br>
+
+        <button id="joinButton" onclick="joinRoom()">
+            🚪 Tham gia phòng
+        </button>
+    </div>
+
+
+    <!-- MÀN HÌNH PHÒNG CHỜ -->
+    <div id="roomScreen">
+        <h1>🎮 Phòng chờ</h1>
+
+        <p>Mã phòng của cậu là:</p>
+        <div id="roomCode"></div>
+
+        <h3>👥 Người chơi trong phòng</h3>
+        <ul id="playerList"></ul>
+
+        <!-- Nút dành cho Chủ phòng (Host) -->
+        <button id="startBtn" onclick="startGame()" style="display: none;">
+            🚀 Bắt đầu game
+        </button>
+
+        <!-- Thông báo dành cho Thành viên thường -->
+        <p id="waitingNotice" style="display: none; color: #64748b; font-style: italic; margin-top: 15px;">
+            ⏳ Đang chờ chủ phòng bắt đầu game...
+        </p>
+    </div>
+
+</div>
+
+
+<script>
+    const socket = io();
+
+    let currentRoom = "";
+    let isAmIHost = false;
+
+    // 1. TẠO PHÒNG
+    function createRoom() {
+        const playerName = document.getElementById("playerName").value.trim();
+
+        if (!playerName) {
+            alert("Cậu chưa nhập tên kìa! 😅");
+            return;
+        }
+
+        socket.emit("createRoom", playerName);
+    }
+
+    socket.on("roomCreated", (data) => {
+        currentRoom = data.roomId;
+        isAmIHost = true;
+        
+        showRoom(data.roomId, data.players, true);
+    });
+
+
+    // 2. THAM GIA PHÒNG
+    function joinRoom() {
+        const button = document.getElementById("joinButton");
+        const playerName = document.getElementById("playerName").value.trim();
+        const roomId = document.getElementById("roomInput").value.trim().toUpperCase();
+
+        if (!playerName) {
+            alert("Cậu chưa nhập tên!");
+            return;
+        }
+
+        if (!roomId) {
+            alert("Cậu chưa nhập mã phòng!");
+            return;
+        }
+
+        button.disabled = true;
+        button.textContent = "⏳ Đang tham gia...";
+
+        currentRoom = roomId;
+
+        socket.emit("joinRoom", {
+            roomId: roomId,
+            playerName: playerName
+        });
+    }
+
+    socket.on("playersUpdated", (data) => {
+        const button = document.getElementById("joinButton");
+        if (button) {
+            button.disabled = false;
+            button.textContent = "🚪 Tham gia phòng";
+        }
+
+        if (data.hostId && socket.id) {
+            isAmIHost = (socket.id === data.hostId);
+        }
+
+        showRoom(currentRoom, data.players, isAmIHost, data.hostId);
+    });
+
+    socket.on("joinError", (message) => {
+        alert(message);
+        const button = document.getElementById("joinButton");
+        if (button) {
+            button.disabled = false;
+            button.textContent = "🚪 Tham gia phòng";
+        }
+    });
+
+
+    // 3. BẮT ĐẦU GAME
+    function startGame() {
+        socket.emit("startGame", { roomId: currentRoom });
+    }
+
+    socket.on("gameStarted", () => {
+        alert("🎉 Game chính thức bắt đầu rồi nè! Chiến thôi!");
+    });
+
+
+    // 4. HÀM CẬP NHẬT GIAO DIỆN
+    function showRoom(roomId, players, isHost, hostId) {
+        document.getElementById("homeScreen").style.display = "none";
+        document.getElementById("roomScreen").style.display = "block";
+        document.getElementById("roomCode").textContent = roomId;
+
+        updatePlayerList(players, hostId);
+
+        const startBtn = document.getElementById("startBtn");
+        const waitingNotice = document.getElementById("waitingNotice");
+
+        if (isHost) {
+            startBtn.style.display = "inline-block";
+            waitingNotice.style.display = "none";
+        } else {
+            startBtn.style.display = "none";
+            waitingNotice.style.display = "block";
+        }
+    }
+
+    function updatePlayerList(players, hostId) {
+        const list = document.getElementById("playerList");
+        list.innerHTML = "";
+
+        players.forEach((player) => {
+            const li = document.createElement("li");
+
+            if (player.id === hostId || (players.length === 1 && isAmIHost)) {
+                li.innerHTML = `👤 ${player.name} <span class="host-badge">Chủ phòng</span>`;
+            } else {
+                li.innerHTML = `👤 ${player.name}`;
+            }
+
+            list.appendChild(li);
+        });
+    }
+</script>
+
+</body>
+</html>
