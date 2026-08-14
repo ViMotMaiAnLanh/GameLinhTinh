@@ -4,72 +4,138 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Game Linh Tinh - Party Games</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="css/style.css">
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
     <div class="container">
-        <!-- MÀN HÌNH 1: NHẬP TÊN -->
-        <div id="login-screen" class="card">
+        <!-- 1. MÀN HÌNH ĐĂNG NHẬP -->
+        <div id="screen-login" class="card">
             <h1>🎮 Game Linh Tinh</h1>
             <div class="input-group">
                 <label>Tên của bạn:</label>
                 <input type="text" id="player-name" placeholder="Nhập tên..." maxlength="12">
             </div>
             <div class="input-group">
-                <label>Mã Phòng:</label>
+                <label>Mã phòng:</label>
                 <input type="text" id="room-id" placeholder="Nhập mã phòng...">
             </div>
-            <button id="btn-join" class="btn primary-btn">Vào / Tạo Phòng</button>
+            <button id="btn-join" class="btn primary-btn">Vào phòng / tạo phòng</button>
             <div class="qr-container">
-                <img src="/qr-code.png" alt="Mã QR" class="qr-img">
+                <img src="qr-code.png" alt="QR CỦA WEB" class="qr-img">
             </div>
         </div>
 
-        <!-- MÀN HÌNH 2: SẢNH CHỜ -->
-        <div id="lobby-screen" class="card hidden">
-            <h2>Sảnh Chờ - Phòng: <span id="display-room-id"></span></h2>
+        <!-- 2. MÀN HÌNH SẢNH CHỜ (LOBBY) -->
+        <div id="screen-lobby" class="card hidden">
+            <h2 id="lobby-room-title">Mã phòng: ---</h2>
+            
+            <!-- Chọn game dành cho chủ phòng -->
+            <div id="host-game-select" class="host-box hidden">
+                <button class="btn game-btn" onclick="selectGame('masoi')">Tên game 1 (Ma Sói)</button>
+                <button class="btn game-btn disabled" disabled>Tên game 2 (Sắp ra mắt)</button>
+            </div>
+
+            <div class="status-bar">
+                <span>Người đã sẵn sàng: <strong id="ready-count">0/0</strong></span>
+            </div>
+
             <div class="player-list-box">
-                <h3>Danh sách người chơi (<span id="player-count">0</span>/12):</h3>
-                <ul id="player-list"></ul>
+                <h3>Người đang tham gia:</h3>
+                <ul id="lobby-player-list"></ul>
             </div>
 
-            <div id="host-controls" class="hidden">
-                <h3>Chọn trò chơi:</h3>
-                <button class="btn game-btn" onclick="selectGame('masoi')">🐺 Ma Sói (6 - 12 người)</button>
+            <!-- Nút bấm ở Lobby -->
+            <div id="lobby-actions">
+                <button id="btn-ready" class="btn success-btn">Sẵn sàng</button>
+                <button id="btn-start-game" class="btn primary-btn hidden">Bắt đầu</button>
             </div>
-            <p id="waiting-msg">Đang chờ chủ phòng chọn game...</p>
         </div>
 
-        <!-- MÀN HÌNH 3: GAME MA SÓI -->
-        <div id="game-masoi-screen" class="card hidden">
+        <!-- 3. MÀN HÌNH VÀO GAME & NHẬN VAI -->
+        <div id="screen-role-reveal" class="card hidden">
+            <h2 id="reveal-player-name">"Tên" - [Chức năng]</h2>
             <div class="role-card-container">
-                <img id="role-img" src="" alt="Lá bài chức năng" class="role-img">
-                <div class="role-info">
-                    <h2 id="role-title">Tên chức vụ</h2>
-                    <p id="role-desc">Hướng dẫn chức năng...</p>
-                </div>
+                <img id="reveal-role-img" src="" alt="Ảnh thẻ bài" class="role-img">
+                <p id="reveal-role-desc" class="role-desc">Đoạn hướng dẫn...</p>
+            </div>
+            <button id="btn-start-first-night" class="btn success-btn hidden">Bắt đầu đêm đầu tiên</button>
+            <p id="waiting-first-night-msg" class="sub-text">Đang chờ chủ phòng bắt đầu đêm đầu tiên...</p>
+        </div>
+
+        <!-- 4. MÀN HÌNH BAN ĐÊM (LƯỢT HÀNH ĐỘNG) -->
+        <div id="screen-night-action" class="card hidden">
+            <h2 id="night-player-header">"Tên" - [Chức năng]</h2>
+            <p id="night-instruction" class="instruction-text">Hướng dẫn hành động...</p>
+            
+            <!-- Khung thông báo đặc biệt (Cứu người của Phù thủy / Nhận diện Cupid) -->
+            <div id="night-special-box" class="special-box hidden">
+                <p id="night-special-msg"></p>
+                <div id="night-special-buttons" class="btn-group-row"></div>
             </div>
 
-            <!-- Khu vực danh sách chọn người -->
-            <div id="action-box" class="action-box hidden">
-                <h3 id="action-title">Lượt của bạn</h3>
-                <div id="target-selector" class="target-grid"></div>
-                <button id="btn-action-confirm" class="btn primary-btn hidden">Xác nhận</button>
+            <!-- Danh sách chọn người chơi -->
+            <div id="night-target-selector" class="target-grid"></div>
+
+            <button id="btn-night-confirm" class="btn primary-btn hidden">Xác nhận và kết thúc lượt</button>
+        </div>
+
+        <!-- 5. MÀN HÌNH BAN NGÀY (THẢO LUẬN & VOTE) -->
+        <div id="screen-day" class="card hidden">
+            <h2 id="day-header">"Tên" - Tiến hành thảo luận</h2>
+            <p id="day-status-msg" class="status-msg">Đêm qua có X người chết.</p>
+            
+            <div class="status-bar">
+                <span>Số lượng sói còn lại: <strong id="wolves-left-count">?/2</strong></span>
             </div>
 
-            <!-- Các nút điều khiển tách hàng -->
-            <div class="bottom-actions">
-                <button id="btn-start-first-night" class="btn success-btn">Bắt đầu đêm đầu tiên</button>
-                <button id="btn-finish-turn" class="btn primary-btn hidden">Hoàn thành lượt</button>
-                <button id="btn-start-next-night" class="btn primary-btn hidden">Bắt đầu đêm</button>
+            <div class="player-list-box">
+                <h3>Người còn sống:</h3>
+                <div id="day-target-selector" class="target-grid"></div>
             </div>
+
+            <button id="btn-vote-confirm" class="btn primary-btn hidden">Chọn người chơi này</button>
+            <button id="btn-no-vote" class="btn secondary-btn hidden">Không vote, bắt đầu đêm</button>
+        </div>
+
+        <!-- 6. MÀN HÌNH TỔNG KẾT NGÀY -->
+        <div id="screen-day-summary" class="card hidden">
+            <h2>"Tên" - Tổng kết ngày</h2>
+            <p id="summary-result-text" class="highlight-text">"Tên" đã bị treo cổ</p>
+            
+            <div class="player-list-box">
+                <h3>Người còn sống:</h3>
+                <ul id="summary-alive-list"></ul>
+            </div>
+
+            <button id="btn-start-next-night" class="btn primary-btn hidden">Bắt đầu đêm</button>
+            <p id="waiting-next-night-msg" class="sub-text">Đang chờ chủ phòng bắt đầu đêm tiếp theo...</p>
+        </div>
+
+        <!-- 7. MÀN HÌNH NGƯỜI CHẾT (SPECTATOR) -->
+        <div id="screen-dead" class="card hidden">
+            <h2>"Tên" - Bạn đã chết</h2>
+            <img src="Chết rồi.jpe" alt="Chết rồi" class="role-img">
+            <p class="instruction-text">Bạn đã chết hãy tiếp tục theo dõi trò chơi</p>
+        </div>
+
+        <!-- 8. MÀN HÌNH KẾT THÚC GAME (VICTORY) -->
+        <div id="screen-game-over" class="card hidden">
+            <h1 id="winner-title">DÂN LÀNG CHIẾN THẮNG</h1>
+            
+            <div class="player-list-box">
+                <h3>Danh sách chức năng:</h3>
+                <ul id="game-over-role-list"></ul>
+            </div>
+
+            <button id="btn-play-again" class="btn success-btn hidden">Tiếp tục chơi ván nữa</button>
+            <button id="btn-finish-room" class="btn danger-btn hidden">Kết thúc</button>
         </div>
     </div>
 
-    <audio id="audio-sang" src="/Sáng.mp3" preload="auto"></audio>
+    <audio id="audio-sang" src="Sáng.mp3" preload="auto"></audio>
 
-    <script src="/js/main.js"></script>
-    <script src="/js/game1.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/game1.js"></script>
 </body>
 </html>
