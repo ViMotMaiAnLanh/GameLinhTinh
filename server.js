@@ -1,120 +1,130 @@
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-const path = require("path");
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Trỏ Express vào thư mục public để đọc file tĩnh (index.html, CSS, JS...)
-app.use(express.static(path.join(__dirname, "public")));
+// Phục vụ các file tĩnh trong thư mục public
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Trả về file index.html từ trong thư mục public khi vào trang chủ
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
+// Quản lý dữ liệu các phòng chơi
 const rooms = {};
 
-io.on("connection", (socket) => {
-  console.log("Có người kết nối mới:", socket.id);
+// Thứ tự gọi ban đêm
+const NIGHT_ORDER = ['Cupid', 'Bảo vệ', 'Thợ săn', 'Tiên tri', 'Sói', 'Phù thủy'];
 
-  // 1. TẠO PHÒNG
-  socket.on("createRoom", (playerName) => {
-    const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+// Thuật toán phân vai tự động (6 - 12 người)
+function assignRoles(playerList) {
+    const total = playerList.length;
+    let roles = [];
 
-    rooms[roomId] = {
-      host: socket.id,
-      players: [
-        {
-          id: socket.id,
-          name: playerName
+    if (total >= 6 && total <= 7) {
+        roles = ['Sói', 'Bảo vệ', 'Tiên tri'];
+        while (roles.length < total) roles.push('Dân');
+    } else if (total >= 8 && total <= 10) {
+        roles = ['Sói', 'Sói', 'Tiên tri', 'Bảo vệ', 'Dân', 'Dân'];
+        const optional = ['Phù thủy', 'Thằng khờ', 'Thợ săn', 'Dân'];
+        while (roles.length < total) {
+            const randIndex = Math.floor(Math.random() * optional.length);
+            roles.push(optional[randIndex]);
         }
-      ]
-    };
-
-    socket.join(roomId);
-
-    // Gửi phản hồi về cho Chủ phòng
-    socket.emit("roomCreated", {
-      roomId: roomId,
-      players: rooms[roomId].players,
-      isHost: true
-    });
-
-    console.log(`[TẠO PHÒNG] ${playerName} đã tạo phòng ${roomId}`);
-  });
-
-  // 2. THAM GIA PHÒNG
-  socket.on("joinRoom", ({ roomId, playerName }) => {
-    const room = rooms[roomId];
-
-    if (!room) {
-      socket.emit("joinError", "Mã phòng không tồn tại!");
-      return;
-    }
-
-    const alreadyJoined = room.players.some((player) => player.id === socket.id);
-    if (alreadyJoined) return;
-
-    room.players.push({
-      id: socket.id,
-      name: playerName
-    });
-
-    socket.join(roomId);
-
-    // Cập nhật danh sách người chơi cho TẤT CẢ mọi người trong phòng
-    io.to(roomId).emit("playersUpdated", {
-      players: room.players,
-      hostId: room.host
-    });
-
-    console.log(`[VÀO PHÒNG] ${playerName} đã tham gia phòng ${roomId}`);
-  });
-
-  // 3. BẮT ĐẦU GAME
-  socket.on("startGame", ({ roomId }) => {
-    const room = rooms[roomId];
-
-    if (room && room.host === socket.id) {
-      io.to(roomId).emit("gameStarted");
-      console.log(`[START GAME] Phòng ${roomId} bắt đầu chơi!`);
-    }
-  });
-
-  // 4. XỬ LÝ KHI CÓ NGƯỜI THOÁT
-  socket.on("disconnect", () => {
-    for (const roomId in rooms) {
-      const room = rooms[roomId];
-      const index = room.players.findIndex((p) => p.id === socket.id);
-
-      if (index !== -1) {
-        room.players.splice(index, 1);
-
-        if (room.players.length === 0) {
-          delete rooms[roomId];
-        } else {
-          // Nếu chủ phòng thoát, chuyển quyền Host cho người tiếp theo
-          if (room.host === socket.id) {
-            room.host = room.players[0].id;
-          }
-
-          io.to(roomId).emit("playersUpdated", {
-            players: room.players,
-            hostId: room.host
-          });
+    } else if (total >= 11 && total <= 12) {
+        roles = ['Sói', 'Sói', 'Tiên tri', 'Bảo vệ', 'Dân', 'Dân'];
+        const optional = ['Cupid', 'Thằng khờ', 'Thợ săn', 'Phù thủy', 'Dân'];
+        while (roles.length < total) {
+            const randIndex = Math.floor(Math.random() * optional.length);
+            roles.push(optional[randIndex]);
         }
-        break;
-      }
     }
-  });
+    // Trộn ngẫu nhiên
+    return roles.sort(() => Math.random() - 0.5);
+}
+
+// Kiểm tra điều kiện thắng
+function checkWinCondition(room, causeOfDeath) {
+    const alivePlayers = room.players.filter(p => p.isAlive);
+    const aliveWolves = alivePlayers.filter(p => p.role === 'Sói');
+    const aliveOthers = alivePlayers.filter(p => p.role !== 'Sói');
+
+    // 1. Thằng khờ thắng khi bị vote chết ban ngày
+    if (causeOfDeath === 'vote' && room.lastVotedPlayer && room.lastVotedPlayer.role === 'Thằng khờ') {
+        return { gameOver: true, winner: 'THẰNG KHỜ THẮNG!' };
+    }
+
+    // 2. Cặp đôi Cupid thắng (Nếu chỉ còn 2 người sống và là cặp đôi)
+    if (alivePlayers.length === 2 && room.couple && room.couple.length === 2) {
+        const isCoupleAlive = room.couple.every(id => {
+            const p = room.players.find(pl => pl.id === id);
+            return p && p.isAlive;
+        });
+        if (isCoupleAlive) return { gameOver: true, winner: 'PHE CUPID / CẶP ĐÔI THẮNG!' };
+    }
+
+    // 3. Phe Dân làng thắng (Sói chết hết)
+    if (aliveWolves.length === 0) {
+        return { gameOver: true, winner: 'DÂN LÀNG THẮNG!' };
+    }
+
+    // 4. Phe Sói thắng (Số Sói >= Số người phe khác còn sống)
+    if (aliveWolves.length >= aliveOthers.length) {
+        return { gameOver: true, winner: 'SÓI THẮNG!' };
+    }
+
+    return { gameOver: false };
+}
+
+// Lắng nghe kết nối Socket.io
+io.on('connection', (socket) => {
+    console.log('Người chơi kết nối:', socket.id);
+
+    // Xử lý tạo phòng / vào phòng...
+    socket.on('joinRoom', ({ roomId, playerName }) => {
+        socket.join(roomId);
+        if (!rooms[roomId]) {
+            rooms[roomId] = {
+                id: roomId,
+                host: socket.id,
+                players: [],
+                nightCount: 0,
+                couple: [],
+                witchMedicines: { heal: true, poison: true },
+                nightActions: {}
+            };
+        }
+        
+        const room = rooms[roomId];
+        room.players.push({
+            id: socket.id,
+            name: playerName,
+            role: '',
+            isAlive: true,
+            protectedLastNight: false
+        });
+
+        io.to(roomId).emit('updatePlayerList', room.players);
+    });
+
+    // Bắt đầu game & Phân vai
+    socket.on('startGame', (roomId) => {
+        const room = rooms[roomId];
+        if (!room) return;
+
+        const roles = assignRoles(room.players);
+        room.players.forEach((player, index) => {
+            player.role = roles[index];
+            io.to(player.id).emit('receiveRole', { role: player.role });
+        });
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Người chơi ngắt kết nối:', socket.id);
+    });
 });
 
-// Lấy Port tự động do Render cấp khi chạy Online, nếu chạy local thì mới dùng 3000
 const PORT = process.env.PORT || 3000;
-
 server.listen(PORT, () => {
-  console.log(`🚀 Server đang chạy tại cổng: ${PORT}`);
+    console.log(`Server đang chạy tại port ${PORT}`);
 });

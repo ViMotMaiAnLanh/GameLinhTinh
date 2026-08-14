@@ -1,0 +1,149 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+}
+
+body {
+    background-color: #121212;
+    color: #ffffff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 15px;
+}
+
+.container {
+    width: 100%;
+    max-width: 450px;
+}
+
+.card {
+    background-color: #1e1e1e;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    text-align: center;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.input-group {
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 14px;
+    color: #ccc;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background-color: #2a2a2a;
+    color: #fff;
+    font-size: 16px;
+}
+
+.btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.primary-btn { background-color: #007bff; color: white; }
+.success-btn { background-color: #28a745; color: white; }
+.game-btn { background-color: #6f42c1; color: white; margin-bottom: 10px; }
+.btn:disabled { background-color: #444; color: #888; cursor: not-allowed; }
+
+.player-list-box {
+    margin-top: 15px;
+    background: #2a2a2a;
+    padding: 10px;
+    border-radius: 8px;
+    text-align: left;
+}
+
+.player-list-box ul {
+    list-style: none;
+    margin-top: 5px;
+}
+
+.player-list-box li {
+    padding: 6px 0;
+    border-bottom: 1px solid #333;
+}
+
+/* GIAO DIỆN GAME MA SÓI */
+.role-card-container {
+    background: #2a2a2a;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 15px;
+}
+
+.role-img {
+    width: 180px;
+    height: 240px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    border: 2px solid #555;
+}
+
+.role-info h2 {
+    color: #ffc107;
+    margin-bottom: 8px;
+}
+
+.role-info p {
+    font-size: 14px;
+    line-height: 1.4;
+    color: #ddd;
+}
+
+.action-box {
+    background: #252525;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border: 1px solid #007bff;
+}
+
+.target-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 12px 0;
+}
+
+.target-item {
+    background: #333;
+    padding: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+
+.target-item.selected {
+    border-color: #007bff;
+    background: #1d3557;
+}
+
+.bottom-actions {
+    margin-top: 10px;
+}
