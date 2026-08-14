@@ -5,126 +5,467 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, { cors: { origin: "*" } });
 
-// Phục vụ các file tĩnh trong thư mục public
 app.use(express.static(path.join(__dirname, 'public')));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
-// Quản lý dữ liệu các phòng chơi
 const rooms = {};
 
-// Thứ tự gọi ban đêm
-const NIGHT_ORDER = ['Cupid', 'Bảo vệ', 'Thợ săn', 'Tiên tri', 'Sói', 'Phù thủy'];
+function generateRoles(playerCount) {
+  let roles = [];
+  let wolfCount = 1;
+  if (playerCount >= 8) wolfCount = 2;
+  if (playerCount >= 12) wolfCount = 3;
 
-// Thuật toán phân vai tự động (6 - 12 người)
-function assignRoles(playerList) {
-    const total = playerList.length;
-    let roles = [];
+  for (let i = 0; i < wolfCount; i++) roles.push('Sói');
+  roles.push('Tiên tri');
+  roles.push('Bảo vệ');
+  roles.push('Dân');
+  roles.push('Dân');
 
-    if (total >= 6 && total <= 7) {
-        roles = ['Sói', 'Bảo vệ', 'Tiên tri'];
-        while (roles.length < total) roles.push('Dân');
-    } else if (total >= 8 && total <= 10) {
-        roles = ['Sói', 'Sói', 'Tiên tri', 'Bảo vệ', 'Dân', 'Dân'];
-        const optional = ['Phù thủy', 'Thằng khờ', 'Thợ săn', 'Dân'];
-        while (roles.length < total) {
-            const randIndex = Math.floor(Math.random() * optional.length);
-            roles.push(optional[randIndex]);
-        }
-    } else if (total >= 11 && total <= 12) {
-        roles = ['Sói', 'Sói', 'Tiên tri', 'Bảo vệ', 'Dân', 'Dân'];
-        const optional = ['Cupid', 'Thằng khờ', 'Thợ săn', 'Phù thủy', 'Dân'];
-        while (roles.length < total) {
-            const randIndex = Math.floor(Math.random() * optional.length);
-            roles.push(optional[randIndex]);
-        }
+  const optionalRoles = ['Phù thủy', 'Thợ Săn', 'Cupid', 'Thằng khờ'];
+  const shuffledOptional = optionalRoles.sort(() => Math.random() - 0.5);
+
+  while (roles.length < playerCount) {
+    if (shuffledOptional.length > 0) {
+      roles.push(shuffledOptional.pop());
+    } else {
+      roles.push('Dân');
     }
-    // Trộn ngẫu nhiên
-    return roles.sort(() => Math.random() - 0.5);
+  }
+  return roles.sort(() => Math.random() - 0.5);
 }
 
-// Kiểm tra điều kiện thắng
-function checkWinCondition(room, causeOfDeath) {
-    const alivePlayers = room.players.filter(p => p.isAlive);
-    const aliveWolves = alivePlayers.filter(p => p.role === 'Sói');
-    const aliveOthers = alivePlayers.filter(p => p.role !== 'Sói');
-
-    // 1. Thằng khờ thắng khi bị vote chết ban ngày
-    if (causeOfDeath === 'vote' && room.lastVotedPlayer && room.lastVotedPlayer.role === 'Thằng khờ') {
-        return { gameOver: true, winner: 'THẰNG KHỜ THẮNG!' };
+// Kiểm tra điều kiện thắng (A, B, C, D)
+function checkWinCondition(room, roomCode, foolEjectedId = null) {
+  const alivePlayers = room.players.filter(p => p.isAlive);
+  
+  // D. Thằng khờ bị vote treo cổ
+  if (foolEjectedId) {
+    const foolPlayer = room.players.find(p => p.id === foolEjectedId);
+    if (foolPlayer && foolPlayer.role === 'Thằng khờ') {
+      endGame(roomCode, 'Thằng khờ chiến thắng');
+      return true;
     }
+  }
 
-    // 2. Cặp đôi Cupid thắng (Nếu chỉ còn 2 người sống và là cặp đôi)
-    if (alivePlayers.length === 2 && room.couple && room.couple.length === 2) {
-        const isCoupleAlive = room.couple.every(id => {
-            const p = room.players.find(pl => pl.id === id);
-            return p && p.isAlive;
-        });
-        if (isCoupleAlive) return { gameOver: true, winner: 'PHE CUPID / CẶP ĐÔI THẮNG!' };
+  // C. Cặp đôi Cupid sống đến khi còn số người tương ứng
+  if (room.lovers.length === 2) {
+    const loversAlive = room.lovers.every(id => {
+      const p = room.players.find(pl => pl.id === id);
+      return p && p.isAlive;
+    });
+
+    if (loversAlive) {
+      const countedAlive = alivePlayers.filter(p => p.role !== 'Cupid');
+      const wolvesAlive = alivePlayers.filter(p => p.role === 'Sói');
+      if (countedAlive.length <= 4 && wolvesAlive.length <= 2) {
+        endGame(roomCode, 'Phe Cupid chiến thắng');
+        return true;
+      }
     }
+  }
 
-    // 3. Phe Dân làng thắng (Sói chết hết)
-    if (aliveWolves.length === 0) {
-        return { gameOver: true, winner: 'DÂN LÀNG THẮNG!' };
-    }
+  const wolves = alivePlayers.filter(p => p.role === 'Sói');
+  const nonWolves = alivePlayers.filter(p => p.role !== 'Sói');
 
-    // 4. Phe Sói thắng (Số Sói >= Số người phe khác còn sống)
-    if (aliveWolves.length >= aliveOthers.length) {
-        return { gameOver: true, winner: 'SÓI THẮNG!' };
-    }
+  // A. Toàn bộ Sói bị tiêu diệt -> Dân làng thắng
+  if (wolves.length === 0) {
+    endGame(roomCode, 'Dân làng chiến thắng');
+    return true;
+  }
 
-    return { gameOver: false };
+  // B. Số Sói còn lại >= số người phe dân làng -> Sói thắng
+  if (wolves.length >= nonWolves.length) {
+    endGame(roomCode, 'Sói chiến thắng');
+    return true;
+  }
+
+  return false;
 }
 
-// Lắng nghe kết nối Socket.io
+function endGame(roomCode, winnerMessage) {
+  const room = rooms[roomCode];
+  if (!room) return;
+  
+  const rolesSummary = room.players.map(p => ({ name: p.name, role: p.role }));
+  io.to(roomCode).emit('gameOver', {
+    winnerMessage,
+    rolesSummary
+  });
+}
+
 io.on('connection', (socket) => {
-    console.log('Người chơi kết nối:', socket.id);
+  socket.on('joinRoom', ({ playerName, roomCode }) => {
+    socket.join(roomCode);
+    socket.playerName = playerName;
+    socket.roomCode = roomCode;
 
-    // Xử lý tạo phòng / vào phòng...
-    socket.on('joinRoom', ({ roomId, playerName }) => {
-        socket.join(roomId);
-        if (!rooms[roomId]) {
-            rooms[roomId] = {
-                id: roomId,
-                host: socket.id,
-                players: [],
-                nightCount: 0,
-                couple: [],
-                witchMedicines: { heal: true, poison: true },
-                nightActions: {}
-            };
+    if (!rooms[roomCode]) {
+      rooms[roomCode] = {
+        hostId: socket.id,
+        players: [],
+        nightTurnIndex: 0,
+        isFirstNight: true,
+        protectedPreviousNight: null,
+        wolfTarget: null,
+        wolfVotes: {},
+        witchPotions: { heal: true, poison: true },
+        lovers: [],
+        deadPlayers: new Set(),
+        votes: {},
+        nightReadyPlayers: new Set(),
+        loversAckCount: 0
+      };
+    }
+
+    const room = rooms[roomCode];
+    if (!room.players.find(p => p.id === socket.id)) {
+      room.players.push({
+        id: socket.id,
+        name: playerName,
+        isHost: room.hostId === socket.id,
+        isReady: false,
+        isAlive: true,
+        role: null
+      });
+    }
+
+    io.to(roomCode).emit('updateLobby', {
+      players: room.players,
+      hostName: room.players.find(p => p.isHost)?.name
+    });
+  });
+
+  socket.on('toggleReady', ({ isReady }) => {
+    const room = rooms[socket.roomCode];
+    if (!room) return;
+    const player = room.players.find(p => p.id === socket.id);
+    if (player) player.isReady = isReady;
+    io.to(socket.roomCode).emit('updateLobby', {
+      players: room.players,
+      hostName: room.players.find(p => p.isHost)?.name
+    });
+  });
+
+  socket.on('startGame', () => {
+    const room = rooms[socket.roomCode];
+    if (!room || room.hostId !== socket.id) return;
+    if (room.players.length < 4) {
+      socket.emit('errorMessage', 'Cần tối thiểu 4 người chơi để bắt đầu!');
+      return;
+    }
+
+    const assignedRoles = generateRoles(room.players.length);
+    room.players.forEach((player, index) => {
+      player.role = assignedRoles[index];
+      player.isAlive = true;
+    });
+
+    room.players.forEach(player => {
+      io.to(player.id).emit('receiveRole', { role: player.role, name: player.name });
+    });
+  });
+
+  socket.on('restartGame', () => {
+    const room = rooms[socket.roomCode];
+    if (!room) return;
+    room.nightTurnIndex = 0;
+    room.isFirstNight = true;
+    room.protectedPreviousNight = null;
+    room.wolfTarget = null;
+    room.wolfVotes = {};
+    room.witchPotions = { heal: true, poison: true };
+    room.lovers = [];
+    room.deadPlayers = new Set();
+    room.votes = {};
+    room.nightReadyPlayers = new Set();
+
+    const assignedRoles = generateRoles(room.players.length);
+    room.players.forEach((player, index) => {
+      player.role = assignedRoles[index];
+      player.isAlive = true;
+    });
+
+    room.players.forEach(player => {
+      io.to(player.id).emit('receiveRole', { role: player.role, name: player.name });
+    });
+  });
+
+  socket.on('requestStartNight', () => {
+    const room = rooms[socket.roomCode];
+    if (!room) return;
+
+    room.nightReadyPlayers.add(socket.id);
+    const alivePlayers = room.players.filter(p => p.isAlive);
+
+    socket.emit('waitingForOthersToSleep');
+
+    if (room.nightReadyPlayers.size >= alivePlayers.length) {
+      room.nightReadyPlayers.clear();
+      io.to(socket.roomCode).emit('allReadyForNightNotice');
+      
+      setTimeout(() => {
+        room.nightTurnIndex = 0;
+        room.wolfTarget = null;
+        room.wolfVotes = {};
+        processNextNightTurn(room, socket.roomCode);
+      }, 10000);
+    }
+  });
+
+  socket.on('cupidSelectLovers', ({ lover1Id, lover2Id }) => {
+    const room = rooms[socket.roomCode];
+    if (!room) return;
+    room.lovers = [lover1Id, lover2Id];
+    room.loversAckCount = 0;
+
+    const p1 = room.players.find(p => p.id === lover1Id);
+    const p2 = room.players.find(p => p.id === lover2Id);
+    if (p1 && p2) {
+      io.to(p1.id).emit('wakeUpLovers', { partnerName: p2.name, role: p1.role });
+      io.to(p2.id).emit('wakeUpLovers', { partnerName: p1.name, role: p2.role });
+    }
+  });
+
+  socket.on('confirmLoverAck', () => {
+    const room = rooms[socket.roomCode];
+    if (!room) return;
+    room.loversAckCount++;
+    if (room.loversAckCount >= 2) {
+      setTimeout(() => {
+        scheduleNextNightTurn(room, socket.roomCode);
+      }, 10000);
+    }
+  });
+
+  socket.on('submitNightAction', (data) => {
+    const room = rooms[socket.roomCode];
+    if (!room) return;
+
+    if (data.role === 'Bảo vệ') {
+      room.protectedPreviousNight = data.targetId;
+      scheduleNextNightTurn(room, socket.roomCode);
+    } else if (data.role === 'Sói') {
+      room.wolfVotes[socket.id] = data.targetId;
+      const aliveWolves = room.players.filter(p => p.role === 'Sói' && p.isAlive);
+      
+      if (Object.keys(room.wolfVotes).length >= aliveWolves.length) {
+        const chosenTargets = Object.values(room.wolfVotes);
+        const allSame = chosenTargets.every(val => val === chosenTargets[0]);
+        if (allSame && chosenTargets[0]) {
+          room.wolfTarget = chosenTargets[0];
+        } else {
+          room.wolfTarget = null;
         }
-        
-        const room = rooms[roomId];
-        room.players.push({
-            id: socket.id,
-            name: playerName,
-            role: '',
-            isAlive: true,
-            protectedLastNight: false
-        });
+        scheduleNextNightTurn(room, socket.roomCode);
+      }
+    } else if (data.role === 'Phù thủy') {
+      if (data.useHeal && room.wolfTarget) {
+        room.witchPotions.heal = false;
+        room.wolfTarget = null;
+      }
+      if (data.poisonTargetId) {
+        room.witchPotions.poison = false;
+        room.deadPlayers.add(data.poisonTargetId);
+      }
+      if (!room.witchPotions.heal && !room.witchPotions.poison) {
+        const witchPlayer = room.players.find(p => p.id === socket.id);
+        if (witchPlayer) witchPlayer.role = 'Dân';
+      }
+      scheduleNextNightTurn(room, socket.roomCode);
+    } else {
+      scheduleNextNightTurn(room, socket.roomCode);
+    }
+  });
 
-        io.to(roomId).emit('updatePlayerList', room.players);
+  // BỎ PHIẾU TREO CỔ BAN NGÀY
+  socket.on('submitVote', ({ votedTargetId }) => {
+    const room = rooms[socket.roomCode];
+    if (!room) return;
+
+    room.votes[socket.id] = votedTargetId;
+    
+    const targetPlayer = room.players.find(p => p.id === votedTargetId);
+    socket.emit('voteSubmittedAck', {
+      votedName: targetPlayer ? targetPlayer.name : null
     });
 
-    // Bắt đầu game & Phân vai
-    socket.on('startGame', (roomId) => {
-        const room = rooms[roomId];
-        if (!room) return;
+    const alivePlayers = room.players.filter(p => p.isAlive);
+    if (Object.keys(room.votes).length >= alivePlayers.length) {
+      const voteCounts = {};
+      Object.values(room.votes).forEach(tId => {
+        if (tId) voteCounts[tId] = (voteCounts[tId] || 0) + 1;
+      });
 
-        const roles = assignRoles(room.players);
-        room.players.forEach((player, index) => {
-            player.role = roles[index];
-            io.to(player.id).emit('receiveRole', { role: player.role });
-        });
+      let maxVotes = 0;
+      let eliminatedId = null;
+      let isTie = false;
+
+      for (const [tId, count] of Object.entries(voteCounts)) {
+        if (count > maxVotes) {
+          maxVotes = count;
+          eliminatedId = tId;
+          isTie = false;
+        } else if (count === maxVotes) {
+          isTie = true;
+        }
+      }
+
+      let eliminatedPlayer = null;
+      if (!isTie && eliminatedId && maxVotes > 0) {
+        eliminatedPlayer = room.players.find(p => p.id === eliminatedId);
+      }
+
+      // Kiểm tra Thằng khờ bị treo cổ
+      if (eliminatedPlayer && checkWinCondition(room, socket.roomCode, eliminatedPlayer.id)) {
+        room.votes = {};
+        return;
+      }
+
+      const wolvesRemaining = room.players.filter(p => p.role === 'Sói' && p.isAlive).length;
+      const totalWolves = room.players.filter(p => p.role === 'Sói').length;
+      const remainingAlive = room.players.filter(p => p.isAlive).map(p => p.name);
+
+      io.to(socket.roomCode).emit('voteSummaryResult', {
+        eliminatedName: eliminatedPlayer ? eliminatedPlayer.name : null,
+        wolvesRemainingMsg: `${wolvesRemaining}/${totalWolves}`,
+        aliveList: remainingAlive
+      });
+
+      if (eliminatedPlayer) {
+        const currentAliveList = room.players.filter(pl => pl.isAlive).map(pl => ({ id: pl.id, name: pl.name }));
+        if (eliminatedPlayer.role === 'Thợ Săn') {
+          io.to(eliminatedPlayer.id).emit('youAreDead', { isHunter: true, alivePlayers: currentAliveList });
+        } else {
+          eliminatedPlayer.isAlive = false;
+          io.to(eliminatedPlayer.id).emit('youAreDead', { isHunter: false });
+        }
+      }
+
+      room.votes = {};
+      checkWinCondition(room, socket.roomCode);
+    }
+  });
+
+  // Xử lý khi Thợ Săn thực hiện bắn người
+  socket.on('hunterShoot', ({ targetId }) => {
+    const room = rooms[socket.roomCode];
+    if (!room) return;
+
+    // 1. Đánh dấu Thợ Săn chính thức chết
+    const hunterPlayer = room.players.find(p => p.id === socket.id);
+    if (hunterPlayer) hunterPlayer.isAlive = false;
+
+    // 2. Đánh dấu Người bị Thợ Săn chọn bắn cũng chết cùng lúc
+    const targetPlayer = room.players.find(p => p.id === targetId);
+    if (targetPlayer) {
+      targetPlayer.isAlive = false;
+      io.to(targetId).emit('youAreDead', { isHunter: targetPlayer.role === 'Thợ Săn' });
+    }
+
+    io.to(socket.roomCode).emit('playerKilledByHunter', { 
+      hunterName: socket.playerName, 
+      targetName: targetPlayer ? targetPlayer.name : 'không ai' 
     });
 
-    socket.on('disconnect', () => {
-        console.log('Người chơi ngắt kết nối:', socket.id);
-    });
+    checkWinCondition(room, socket.roomCode);
+  });
+
+  socket.on('disconnect', () => {
+    const room = rooms[socket.roomCode];
+    if (room) {
+      room.players = room.players.filter(p => p.id !== socket.id);
+      io.to(socket.roomCode).emit('updateLobby', {
+        players: room.players,
+        hostName: room.players.find(p => p.isHost)?.name
+      });
+    }
+  });
 });
+
+function scheduleNextNightTurn(room, roomCode) {
+  room.nightTurnIndex++;
+  processNextNightTurn(room, roomCode);
+}
+
+function processNextNightTurn(room, roomCode) {
+  let turnOrder = ['Bảo vệ', 'Sói', 'Tiên tri', 'Phù thủy'];
+  if (room.isFirstNight) {
+    turnOrder = ['Cupid', 'Bảo vệ', 'Sói', 'Tiên tri', 'Phù thủy'];
+  }
+
+  if (room.nightTurnIndex >= turnOrder.length) {
+    room.isFirstNight = false;
+    if (room.wolfTarget && room.wolfTarget !== room.protectedPreviousNight) {
+      room.deadPlayers.add(room.wolfTarget);
+    }
+
+    let finalDead = new Set(room.deadPlayers);
+    room.deadPlayers.forEach(deadId => {
+      if (room.lovers.includes(deadId)) {
+        room.lovers.forEach(lId => finalDead.add(lId));
+      }
+    });
+
+    finalDead.forEach(deadId => {
+      const p = room.players.find(player => player.id === deadId);
+      if (p) {
+        const currentAliveList = room.players.filter(pl => pl.isAlive).map(pl => ({ id: pl.id, name: pl.name }));
+        if (p.role === 'Thợ Săn') {
+          io.to(deadId).emit('youAreDead', { isHunter: true, alivePlayers: currentAliveList });
+        } else {
+          p.isAlive = false;
+          io.to(deadId).emit('youAreDead', { isHunter: false });
+        }
+      }
+    });
+
+    if (checkWinCondition(room, roomCode)) return;
+
+    const alivePlayers = room.players.filter(p => p.isAlive).map(p => ({ id: p.id, name: p.name }));
+    io.to(roomCode).emit('morningHasCome', { alivePlayers });
+    return;
+  }
+
+  const currentRoleTurn = turnOrder[room.nightTurnIndex];
+
+  if (currentRoleTurn === 'Sói') {
+    const aliveWolves = room.players.filter(p => p.role === 'Sói' && p.isAlive);
+    if (aliveWolves.length > 0) {
+      const alivePlayers = room.players.filter(p => p.isAlive).map(p => ({ id: p.id, name: p.name }));
+      aliveWolves.forEach(wolf => {
+        io.to(wolf.id).emit('yourTurnToWakeUp', {
+          role: 'Sói',
+          playersList: alivePlayers
+        });
+      });
+      return;
+    }
+  } else {
+    const activePlayer = room.players.find(p => p.role === currentRoleTurn && p.isAlive);
+    if (activePlayer) {
+      const alivePlayers = room.players.filter(p => p.isAlive).map(p => ({ id: p.id, name: p.name, role: p.role }));
+      const victimPlayer = room.players.find(p => p.id === room.wolfTarget);
+      
+      io.to(activePlayer.id).emit('yourTurnToWakeUp', {
+        role: currentRoleTurn,
+        playersList: alivePlayers,
+        disabledTargetId: currentRoleTurn === 'Bảo vệ' ? room.protectedPreviousNight : null,
+        victimName: victimPlayer ? victimPlayer.name : null,
+        victimId: room.wolfTarget,
+        witchPotions: room.witchPotions
+      });
+      return;
+    }
+  }
+
+  room.nightTurnIndex++;
+  processNextNightTurn(room, roomCode);
+}
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Server đang chạy tại port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));

@@ -1,141 +1,184 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Linh Tinh - Party Games</title>
-    <link rel="stylesheet" href="css/style.css">
-    <script src="/socket.io/socket.io.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game Ma Sói</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+    body { background-color: #f4f7f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    .app-screen { width: 100%; max-width: 380px; min-height: 620px; background: #ffffff; border: 2px solid #ccc; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .screen-section { width: 100%; display: none; flex-direction: column; align-items: center; gap: 15px; }
+    .screen-section.active { display: flex; }
+    h2 { font-size: 20px; text-align: center; margin-bottom: 10px; }
+    .input-group { width: 100%; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .input-group label { font-weight: bold; font-size: 14px; }
+    .input-group input { width: 60%; padding: 6px; border: 1px solid #000; }
+    .btn { width: 80%; padding: 12px; background-color: #cccccc; border: 1px solid #999; border-radius: 20px; font-weight: bold; font-size: 15px; cursor: pointer; text-align: center; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .box-qr { width: 80%; height: 180px; background-color: #cccccc; display: flex; justify-content: center; align-items: center; font-weight: bold; margin-top: 15px; }
+    .info-container { display: flex; width: 100%; gap: 10px; justify-content: space-between; }
+    .info-box { border: 1px solid #000; padding: 10px; flex: 1; min-height: 120px; font-size: 13px; }
+    .game-select-btn { display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .dot { width: 14px; height: 14px; background-color: #4CAF50; border-radius: 50%; display: inline-block; }
+    .card-layout { display: flex; width: 100%; gap: 10px; align-items: center; }
+    .card-img { width: 45%; border: 1px solid #000; border-radius: 8px; }
+    .card-text { width: 50%; border: 1px solid #000; padding: 10px; font-weight: bold; font-size: 14px; text-align: center; min-height: 120px; display: flex; align-items: center; justify-content: center; }
+    
+    #screen-sleep { background-color: #eefbfb; min-height: 500px; justify-content: center; text-align: center; }
+    #screen-sleep h2 { font-size: 28px; margin-bottom: 20px; }
+    #screen-sleep p { font-size: 22px; font-weight: bold; line-height: 1.5; color: #111; }
+    
+    .result-box-container { width: 100%; border: 2px solid #000; padding: 20px 10px; background-color: #f9ffff; min-height: 130px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 15px 0; text-align: center; }
+    .result-box-container p { font-size: 16px; font-weight: bold; line-height: 1.4; color: #000; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <!-- 1. MÀN HÌNH ĐĂNG NHẬP -->
-        <div id="screen-login" class="card">
-            <h1>🎮 Game Linh Tinh</h1>
-            <div class="input-group">
-                <label>Tên của bạn:</label>
-                <input type="text" id="player-name" placeholder="Nhập tên..." maxlength="12">
-            </div>
-            <div class="input-group">
-                <label>Mã phòng:</label>
-                <input type="text" id="room-id" placeholder="Nhập mã phòng...">
-            </div>
-            <button id="btn-join" class="btn primary-btn">Vào phòng / tạo phòng</button>
-            <div class="qr-container">
-                <img src="qr-code.png" alt="QR CỦA WEB" class="qr-img">
-            </div>
-        </div>
+<div class="app-screen">
 
-        <!-- 2. MÀN HÌNH SẢNH CHỜ (LOBBY) -->
-        <div id="screen-lobby" class="card hidden">
-            <h2 id="lobby-room-title">Mã phòng: ---</h2>
-            
-            <!-- Chọn game dành cho chủ phòng -->
-            <div id="host-game-select" class="host-box hidden">
-                <button class="btn game-btn" onclick="selectGame('masoi')">Tên game 1 (Ma Sói)</button>
-                <button class="btn game-btn disabled" disabled>Tên game 2 (Sắp ra mắt)</button>
-            </div>
-
-            <div class="status-bar">
-                <span>Người đã sẵn sàng: <strong id="ready-count">0/0</strong></span>
-            </div>
-
-            <div class="player-list-box">
-                <h3>Người đang tham gia:</h3>
-                <ul id="lobby-player-list"></ul>
-            </div>
-
-            <!-- Nút bấm ở Lobby -->
-            <div id="lobby-actions">
-                <button id="btn-ready" class="btn success-btn">Sẵn sàng</button>
-                <button id="btn-start-game" class="btn primary-btn hidden">Bắt đầu</button>
-            </div>
-        </div>
-
-        <!-- 3. MÀN HÌNH VÀO GAME & NHẬN VAI -->
-        <div id="screen-role-reveal" class="card hidden">
-            <h2 id="reveal-player-name">"Tên" - [Chức năng]</h2>
-            <div class="role-card-container">
-                <img id="reveal-role-img" src="" alt="Ảnh thẻ bài" class="role-img">
-                <p id="reveal-role-desc" class="role-desc">Đoạn hướng dẫn...</p>
-            </div>
-            <button id="btn-start-first-night" class="btn success-btn hidden">Bắt đầu đêm đầu tiên</button>
-            <p id="waiting-first-night-msg" class="sub-text">Đang chờ chủ phòng bắt đầu đêm đầu tiên...</p>
-        </div>
-
-        <!-- 4. MÀN HÌNH BAN ĐÊM (LƯỢT HÀNH ĐỘNG) -->
-        <div id="screen-night-action" class="card hidden">
-            <h2 id="night-player-header">"Tên" - [Chức năng]</h2>
-            <p id="night-instruction" class="instruction-text">Hướng dẫn hành động...</p>
-            
-            <!-- Khung thông báo đặc biệt (Cứu người của Phù thủy / Nhận diện Cupid) -->
-            <div id="night-special-box" class="special-box hidden">
-                <p id="night-special-msg"></p>
-                <div id="night-special-buttons" class="btn-group-row"></div>
-            </div>
-
-            <!-- Danh sách chọn người chơi -->
-            <div id="night-target-selector" class="target-grid"></div>
-
-            <button id="btn-night-confirm" class="btn primary-btn hidden">Xác nhận và kết thúc lượt</button>
-        </div>
-
-        <!-- 5. MÀN HÌNH BAN NGÀY (THẢO LUẬN & VOTE) -->
-        <div id="screen-day" class="card hidden">
-            <h2 id="day-header">"Tên" - Tiến hành thảo luận</h2>
-            <p id="day-status-msg" class="status-msg">Đêm qua có X người chết.</p>
-            
-            <div class="status-bar">
-                <span>Số lượng sói còn lại: <strong id="wolves-left-count">?/2</strong></span>
-            </div>
-
-            <div class="player-list-box">
-                <h3>Người còn sống:</h3>
-                <div id="day-target-selector" class="target-grid"></div>
-            </div>
-
-            <button id="btn-vote-confirm" class="btn primary-btn hidden">Chọn người chơi này</button>
-            <button id="btn-no-vote" class="btn secondary-btn hidden">Không vote, bắt đầu đêm</button>
-        </div>
-
-        <!-- 6. MÀN HÌNH TỔNG KẾT NGÀY -->
-        <div id="screen-day-summary" class="card hidden">
-            <h2>"Tên" - Tổng kết ngày</h2>
-            <p id="summary-result-text" class="highlight-text">"Tên" đã bị treo cổ</p>
-            
-            <div class="player-list-box">
-                <h3>Người còn sống:</h3>
-                <ul id="summary-alive-list"></ul>
-            </div>
-
-            <button id="btn-start-next-night" class="btn primary-btn hidden">Bắt đầu đêm</button>
-            <p id="waiting-next-night-msg" class="sub-text">Đang chờ chủ phòng bắt đầu đêm tiếp theo...</p>
-        </div>
-
-        <!-- 7. MÀN HÌNH NGƯỜI CHẾT (SPECTATOR) -->
-        <div id="screen-dead" class="card hidden">
-            <h2>"Tên" - Bạn đã chết</h2>
-            <img src="Chết rồi.jpe" alt="Chết rồi" class="role-img">
-            <p class="instruction-text">Bạn đã chết hãy tiếp tục theo dõi trò chơi</p>
-        </div>
-
-        <!-- 8. MÀN HÌNH KẾT THÚC GAME (VICTORY) -->
-        <div id="screen-game-over" class="card hidden">
-            <h1 id="winner-title">DÂN LÀNG CHIẾN THẮNG</h1>
-            
-            <div class="player-list-box">
-                <h3>Danh sách chức năng:</h3>
-                <ul id="game-over-role-list"></ul>
-            </div>
-
-            <button id="btn-play-again" class="btn success-btn hidden">Tiếp tục chơi ván nữa</button>
-            <button id="btn-finish-room" class="btn danger-btn hidden">Kết thúc</button>
-        </div>
+  <!-- MÀN HÌNH 1: VÀO PHÒNG -->
+  <div id="screen-1" class="screen-section active">
+    <div style="width: 100%;">
+      <div class="input-group">
+        <label>Tên của bạn:</label>
+        <input type="text" id="player-name-input" placeholder="Nhập tên...">
+      </div>
+      <div class="input-group">
+        <label>Mã phòng:</label>
+        <input type="text" id="room-code-input" placeholder="Mã phòng...">
+      </div>
     </div>
+    <button class="btn" onclick="joinRoom()">Vào phòng / Tạo phòng</button>
+    <div class="box-qr">
+      <img src="qr-code.png" alt="QR Code" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+    </div>
+  </div>
 
-    <audio id="audio-sang" src="Sáng.mp3" preload="auto"></audio>
+  <!-- MÀN HÌNH 2: PHÒNG CHỜ -->
+  <div id="screen-2" class="screen-section">
+    <h2 id="lobby-title">Phòng chờ</h2>
+    <button class="btn game-select-btn">Ma Sói <span class="dot"></span></button>
+    <div class="info-container">
+      <div class="info-box" id="player-list">
+        <strong>Người đang tham gia:</strong><br><em>Đang cập nhật...</em>
+      </div>
+      <div class="info-box" style="text-align: center;">
+        <strong>Người đã sẵn sàng:</strong><br><br>
+        <span id="ready-count" style="font-size: 18px; font-weight: bold;">0/0</span>
+      </div>
+    </div>
+    <button class="btn" id="btn-ready" onclick="toggleReady()" style="background-color: #2ecc71; color: white;">Sẵn sàng</button>
+    <button class="btn" id="btn-start" onclick="startGame()" style="margin-top: 5px;">Bắt đầu (Chủ phòng)</button>
+  </div>
 
-    <script src="js/main.js"></script>
-    <script src="js/game1.js"></script>
+  <!-- MÀN HÌNH 4: PHÁT CHỨC NĂNG -->
+  <div id="screen-4" class="screen-section">
+    <h2 id="role-title">Đang chia vai...</h2>
+    <div class="card-layout">
+      <img id="role-card-img" src="" alt="Lá bài vai trò" class="card-img" style="height: 130px; object-fit: cover;">
+      <div class="card-text" id="role-description">Xem chức năng bí mật của bạn</div>
+    </div>
+    <button class="btn" onclick="requestStartNight()">Bắt đầu đêm đầu tiên</button>
+  </div>
+
+  <!-- MÀN HÌNH ĐÊM - CHỜ NGỦ -->
+  <div id="screen-sleep" class="screen-section">
+    <h2 id="sleep-player-name">“Tên”</h2>
+    <p id="sleep-status-text">Tiếp tục ngủ và đợi<br>kết thúc đêm</p>
+  </div>
+
+  <!-- MÀN HÌNH CHỨC NĂNG ĐÊM -->
+  <div id="screen-night-action" class="screen-section">
+    <h2 id="action-title">Lượt hành động ban đêm</h2>
+    <div id="witch-options" style="display: none; width: 100%; text-align: center; margin-bottom: 10px;"></div>
+    <div id="target-player-list" style="width: 100%; display: flex; flex-direction: column; gap: 8px; align-items: center;"></div>
+    <button class="btn" id="btn-finish-turn" onclick="finishNightTurn()" style="margin-top: 15px;">Kết thúc lượt</button>
+  </div>
+
+  <!-- MÀN HÌNH KẾT QUẢ TIÊN TRI -->
+  <div id="screen-seer-result" class="screen-section" style="background-color: #eefbfb; justify-content: center;">
+    <h2 id="seer-result-title">“Tên” - Tiên tri</h2>
+    <div class="result-box-container">
+      <p id="seer-result-text">Tên người chơi đã được soi - không phải sói</p>
+    </div>
+    <button class="btn" onclick="confirmSeerAndSleep()" style="background-color: #d1c7c7;">Xác nhận và tiếp tục ngủ</button>
+  </div>
+
+  <!-- MÀN HÌNH CẶP ĐÔI CỦA CUPID -->
+  <div id="screen-lover-result" class="screen-section" style="background-color: #eefbfb; justify-content: center;">
+    <h2 id="lover-result-title">“Tên” - Chức năng</h2>
+    <div class="result-box-container">
+      <p>Bạn đã được cupid ghép cặp với</p>
+      <p id="lover-partner-name" style="font-size: 18px; margin: 8px 0;">Tên người chơi 1</p>
+      <p>2 bạn và cupid giờ là phe thứ 3</p>
+    </div>
+    <button class="btn" onclick="confirmLoverAndSleep()" style="background-color: #d1c7c7;">Xác nhận và tiếp tục ngủ</button>
+  </div>
+
+  <!-- MÀN HÌNH SÁNG VOTE TREO CỔ -->
+  <div id="screen-day-vote" class="screen-section">
+    <h2 id="vote-header-name">“Tên”</h2>
+    <div id="vote-target-container" style="width: 100%; display: flex; flex-direction: column; gap: 8px; align-items: center; margin-top: 10px;"></div>
+    <button class="btn" id="btn-confirm-vote" onclick="confirmVoteAction()" style="margin-top: 15px; background-color: #d1c7c7;">Chọn người chơi này.</button>
+    <button class="btn" onclick="submitNoVote()" style="background-color: #d1c7c7;">Không vote</button>
+  </div>
+
+  <!-- MÀN HÌNH TRẠNG THÁI ĐÃ CHỌN VOTE / PHIẾU TRẮNG -->
+  <div id="screen-vote-waiting" class="screen-section" style="background-color: #eefbfb; justify-content: center;">
+    <h2 id="vote-wait-name">“Tên”</h2>
+    <p style="font-size: 24px; font-weight: bold; margin: 10px 0;">Đã chọn</p>
+    <button class="btn" id="vote-wait-choice-btn" style="background-color: #d1c7c7; cursor: default;" disabled>Tên người chơi 1</button>
+  </div>
+
+  <!-- MÀN HÌNH TỔNG KẾT NGÀY -->
+  <div id="screen-day-summary" class="screen-section" style="background-color: #eefbfb;">
+    <h2 id="summary-header-title">“Tên” - Tổng kết ngày</h2>
+    <div style="width: 100%; border: 1px solid #000; padding: 15px; text-align: center; margin: 10px 0; background: #fff;">
+      <p id="summary-ejected-text" style="font-weight: bold; font-size: 16px;">“Tên” - đã bị treo cổ</p>
+      <p style="font-weight: bold; font-size: 15px; margin-top: 8px;">Số lượng sói còn lại<br><span id="summary-wolf-count">1/2</span></p>
+    </div>
+    <div style="width: 100%; border: 1px solid #000; padding: 10px; background: #fff; text-align: left;">
+      <p style="font-weight: bold; margin-bottom: 5px;">Người còn sống</p>
+      <div id="summary-alive-list" style="font-size: 14px; line-height: 1.6;"></div>
+    </div>
+    <button class="btn" onclick="requestStartNight()" style="margin-top: 15px; background-color: #d1c7c7;">bắt đầu đêm</button>
+  </div>
+
+  <!-- MÀN HÌNH THỢ SĂN KÍCH HOẠT KỸ NĂNG KHI CHẾT -->
+  <div id="screen-hunter-action" class="screen-section" style="background-color: #eefbfb;">
+    <h2 id="hunter-header-title">“Tên” - Thợ săn</h2>
+    <div id="hunter-target-container" style="width: 100%; display: flex; flex-direction: column; gap: 10px; align-items: center; margin-top: 15px;"></div>
+    <button class="btn" id="btn-hunter-confirm" onclick="confirmHunterShot()" style="margin-top: 25px; background-color: #d1c7c7; padding: 15px; font-size: 18px; font-weight: bold;">
+      Bắn người này
+    </button>
+  </div>
+
+  <!-- MÀN HÌNH KẾT THÚC GAME -->
+  <div id="screen-end" class="screen-section" style="background-color: #eefbfb;">
+    <h2 id="end-header-title">“Tên” - chủ phòng</h2>
+    <p id="end-winner-title" style="font-size: 24px; font-weight: bold; text-align: center; margin: 10px 0;">Dân làng chiến thắng</p>
+    <div style="width: 100%; border: 1px solid #000; padding: 15px; background: #fff; text-align: center;">
+      <p style="font-size: 22px; font-weight: bold; margin-bottom: 10px;">Chức năng</p>
+      <div id="end-roles-list" style="text-align: left; font-size: 14px; line-height: 1.8;"></div>
+    </div>
+    <button class="btn" onclick="restartGame()" style="margin-top: 15px; background-color: #d1c7c7;">Tiếp tục chơi ván nữa</button>
+    <button class="btn" onclick="exitGame()" style="background-color: #d1c7c7;">Kết thúc</button>
+  </div>
+
+  <!-- MÀN HÌNH BÁO CHẾT -->
+  <div id="screen-dead" class="screen-section">
+    <h2 id="dead-title">Thành viên đã hy sinh</h2>
+    <div class="card-layout">
+      <img src="Chết rồi.jpe" alt="Death Card" class="card-img" style="object-fit: cover; max-height: 150px;">
+      <div class="card-text">Bạn đã chết hãy tiếp tục theo dõi trò chơi</div>
+    </div>
+    <button class="btn" style="background-color: #d1c7c7; cursor: default;" disabled>Xác nhận</button>
+  </div>
+
+</div>
+
+<audio id="morning-bell" src="Sáng.mp3" preload="auto"></audio>
+<script src="/socket.io/socket.io.js"></script>
+<script src="js/main.js"></script>
 </body>
 </html>
