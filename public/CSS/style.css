@@ -2,7 +2,7 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 body {
@@ -10,21 +10,21 @@ body {
     color: #ffffff;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;
     min-height: 100vh;
-    padding: 15px;
+    padding: 12px;
 }
 
 .container {
     width: 100%;
-    max-width: 450px;
+    max-width: 400px;
 }
 
 .card {
     background-color: #1e1e1e;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    padding: 16px;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
     text-align: center;
 }
 
@@ -33,93 +33,102 @@ body {
 }
 
 .input-group {
-    margin-bottom: 15px;
+    margin-bottom: 12px;
     text-align: left;
 }
 
 .input-group label {
     display: block;
-    margin-bottom: 5px;
+    margin-bottom: 6px;
     font-size: 14px;
-    color: #ccc;
+    color: #aaa;
 }
 
 .input-group input {
     width: 100%;
-    padding: 12px;
-    border-radius: 6px;
+    padding: 14px;
+    border-radius: 10px;
     border: 1px solid #333;
     background-color: #2a2a2a;
     color: #fff;
     font-size: 16px;
 }
 
+/* NÚT BẤM TO RÕ, TÁCH HÀNG */
 .btn {
     width: 100%;
-    padding: 12px;
+    padding: 14px;
     border: none;
-    border-radius: 6px;
+    border-radius: 10px;
     font-size: 16px;
     font-weight: bold;
     cursor: pointer;
     margin-top: 10px;
+    display: block;
 }
 
 .primary-btn { background-color: #007bff; color: white; }
 .success-btn { background-color: #28a745; color: white; }
-.game-btn { background-color: #6f42c1; color: white; margin-bottom: 10px; }
-.btn:disabled { background-color: #444; color: #888; cursor: not-allowed; }
+.game-btn { background-color: #6f42c1; color: white; }
+
+.qr-container {
+    margin-top: 15px;
+}
+.qr-img {
+    width: 110px;
+    border-radius: 8px;
+}
 
 .player-list-box {
     margin-top: 15px;
     background: #2a2a2a;
-    padding: 10px;
-    border-radius: 8px;
+    padding: 12px;
+    border-radius: 10px;
     text-align: left;
 }
 
-.player-list-box ul {
-    list-style: none;
-    margin-top: 5px;
-}
-
 .player-list-box li {
-    padding: 6px 0;
+    padding: 8px 0;
     border-bottom: 1px solid #333;
+    list-style: none;
 }
 
-/* GIAO DIỆN GAME MA SÓI */
+/* KHU VỰC THẺ BÀI - GIỚI HẠN KÍCH THƯỚC ĐỂ KHÔNG BỊ TO TRÀN MÀN HÌNH */
 .role-card-container {
-    background: #2a2a2a;
-    padding: 15px;
-    border-radius: 10px;
+    background: #252525;
+    padding: 12px;
+    border-radius: 12px;
     margin-bottom: 15px;
 }
 
 .role-img {
-    width: 180px;
-    height: 240px;
-    object-fit: cover;
-    border-radius: 8px;
-    margin-bottom: 10px;
-    border: 2px solid #555;
+    width: 100%;
+    max-width: 180px; /* Khống chế chiều rộng ảnh */
+    height: auto;
+    max-height: 250px;
+    object-fit: contain;
+    border-radius: 10px;
+    margin: 0 auto 10px auto;
+    display: block;
 }
 
 .role-info h2 {
     color: #ffc107;
-    margin-bottom: 8px;
+    font-size: 20px;
+    margin-bottom: 6px;
 }
 
 .role-info p {
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.4;
-    color: #ddd;
+    color: #ccc;
 }
 
+/* DANH SÁCH CHỌN TÊN DẠNG LƯỚI 2 CỘT */
 .action-box {
-    background: #252525;
-    padding: 15px;
-    border-radius: 8px;
+    background: #2a2a2a;
+    padding: 12px;
+    border-radius: 10px;
     margin-bottom: 15px;
     border: 1px solid #007bff;
 }
@@ -128,22 +137,26 @@ body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
-    margin: 12px 0;
+    margin: 10px 0;
 }
 
 .target-item {
-    background: #333;
-    padding: 10px;
-    border-radius: 6px;
+    background: #3a3a3a;
+    padding: 12px 8px;
+    border-radius: 8px;
     cursor: pointer;
-    border: 1px solid transparent;
+    font-size: 14px;
+    border: 2px solid transparent;
 }
 
 .target-item.selected {
     border-color: #007bff;
     background: #1d3557;
+    font-weight: bold;
 }
 
-.bottom-actions {
-    margin-top: 10px;
+#waiting-msg {
+    margin-top: 15px;
+    color: #888;
+    font-size: 14px;
 }

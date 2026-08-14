@@ -4,29 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Game Linh Tinh - Party Games</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="/css/style.css">
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
     <div class="container">
-        <!-- MÀN HÌNH 1: NHẬP TÊN VÀ TẠO/VÀO PHÒNG -->
+        <!-- MÀN HÌNH 1: NHẬP TÊN -->
         <div id="login-screen" class="card">
             <h1>🎮 Game Linh Tinh</h1>
             <div class="input-group">
-                <label for="player-name">Tên của bạn:</label>
+                <label>Tên của bạn:</label>
                 <input type="text" id="player-name" placeholder="Nhập tên..." maxlength="12">
             </div>
             <div class="input-group">
-                <label for="room-id">Mã Phòng:</label>
-                <input type="text" id="room-id" placeholder="Nhập mã phòng (VD: 1234)...">
+                <label>Mã Phòng:</label>
+                <input type="text" id="room-id" placeholder="Nhập mã phòng...">
             </div>
             <button id="btn-join" class="btn primary-btn">Vào / Tạo Phòng</button>
-            <div style="margin-top: 15px; text-align: center;">
-                <img src="qr-code.png" alt="Mã QR" style="width: 120px; border-radius: 8px;">
+            <div class="qr-container">
+                <img src="/qr-code.png" alt="Mã QR" class="qr-img">
             </div>
         </div>
 
-        <!-- MÀN HÌNH 2: SẢNH CHỜ (LOBBY) -->
+        <!-- MÀN HÌNH 2: SẢNH CHỜ -->
         <div id="lobby-screen" class="card hidden">
             <h2>Sảnh Chờ - Phòng: <span id="display-room-id"></span></h2>
             <div class="player-list-box">
@@ -34,18 +34,15 @@
                 <ul id="player-list"></ul>
             </div>
 
-            <!-- CHỈ CHỦ PHÒNG MỚI THẤY KHU VỰC CHỌN GAME -->
-            <div id="host-controls" class="hidden" style="margin-top: 20px;">
+            <div id="host-controls" class="hidden">
                 <h3>Chọn trò chơi:</h3>
                 <button class="btn game-btn" onclick="selectGame('masoi')">🐺 Ma Sói (6 - 12 người)</button>
-                <button class="btn game-btn disabled" disabled>🎮 Game 2 (Sắp ra mắt)</button>
             </div>
-            <p id="waiting-msg" style="margin-top: 15px; color: #888;">Đang chờ chủ phòng chọn game...</p>
+            <p id="waiting-msg">Đang chờ chủ phòng chọn game...</p>
         </div>
 
-        <!-- MÀN HÌNH 3: GAME 1 - MA SÓI -->
+        <!-- MÀN HÌNH 3: GAME MA SÓI -->
         <div id="game-masoi-screen" class="card hidden">
-            <!-- Thẻ bài chức năng -->
             <div class="role-card-container">
                 <img id="role-img" src="" alt="Lá bài chức năng" class="role-img">
                 <div class="role-info">
@@ -54,14 +51,14 @@
                 </div>
             </div>
 
-            <!-- Khu vực hành động ban đêm / ban ngày -->
+            <!-- Khu vực danh sách chọn người -->
             <div id="action-box" class="action-box hidden">
                 <h3 id="action-title">Lượt của bạn</h3>
                 <div id="target-selector" class="target-grid"></div>
                 <button id="btn-action-confirm" class="btn primary-btn hidden">Xác nhận</button>
             </div>
 
-            <!-- Nút Hoàn thành lượt / Bắt đầu đêm -->
+            <!-- Các nút điều khiển tách hàng -->
             <div class="bottom-actions">
                 <button id="btn-start-first-night" class="btn success-btn">Bắt đầu đêm đầu tiên</button>
                 <button id="btn-finish-turn" class="btn primary-btn hidden">Hoàn thành lượt</button>
@@ -70,11 +67,9 @@
         </div>
     </div>
 
-    <!-- File âm thanh -->
-    <audio id="audio-sang" src="Sáng.mp3" preload="auto"></audio>
+    <audio id="audio-sang" src="/Sáng.mp3" preload="auto"></audio>
 
-    <!-- Script kết nối -->
-    <script src="js/main.js"></script>
-    <script src="js/game1.js"></script>
+    <script src="/js/main.js"></script>
+    <script src="/js/game1.js"></script>
 </body>
 </html>
