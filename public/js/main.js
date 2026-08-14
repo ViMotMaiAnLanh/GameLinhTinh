@@ -10,6 +10,17 @@ let useWitchHeal = false;
 let poisonTargetId = null;
 let isHost = false;
 
+// Hàm hỗ trợ rung điện thoại (chỉ Android / thiết bị có hỗ trợ API Vibrate)
+function triggerVibrate() {
+  if ('vibrate' in navigator) {
+    try {
+      navigator.vibrate([400, 150, 400]);
+    } catch (e) {
+      console.log("Không thể rung:", e);
+    }
+  }
+}
+
 function goToScreen(screenId) {
   if (isDead && screenId !== 'screen-end' && screenId !== 'screen-1') {
     screenId = 'screen-dead';
@@ -102,7 +113,7 @@ socket.on('waitingForOthersToSleep', () => {
 socket.on('allReadyForNightNotice', () => {});
 
 socket.on('wakeUpLovers', (data) => {
-  if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+  triggerVibrate(); // Chỉ rung khi tới lượt Cặp đôi
   const titleBox = document.getElementById('lover-result-title');
   if (titleBox) titleBox.innerText = `“${myName}” - ${data.role || myRole}`;
   const partnerBox = document.getElementById('lover-partner-name');
@@ -122,7 +133,7 @@ socket.on('yourTurnToWakeUp', (data) => {
   poisonTargetId = null;
 
   goToScreen('screen-night-action');
-  if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  triggerVibrate(); // Chỉ rung khi tới lượt chức năng thức dậy
 
   const actionTitle = document.getElementById('action-title');
   if (actionTitle) actionTitle.innerText = `Lượt của: ${data.role.toUpperCase()}`;
@@ -261,11 +272,14 @@ function goToSleepScreen() {
   goToScreen('screen-sleep');
 }
 
+// KHI TRỜI SÁNG (KẾT THÚC ĐÊM) -> MỚI PHÁT FILE ÂM THANH
 socket.on('morningHasCome', (data) => {
   const bellAudio = document.getElementById('morning-bell');
   if (bellAudio) {
-    bellAudio.play().catch(e => console.log("Âm thanh cần tương tác:", e));
+    bellAudio.currentTime = 0;
+    bellAudio.play().catch(e => console.log("Cần tương tác màn hình để phát âm thanh:", e));
   }
+
   if (isDead) {
     goToScreen('screen-dead');
     return;
